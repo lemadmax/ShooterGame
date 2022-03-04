@@ -44,8 +44,15 @@ protected:
 
 	void StopRun();
 
+	void ClientInteract();
+
+	void Interact();
+
 	UFUNCTION(Server, reliable, WithValidation)
 	void ServerSetRunning(bool isRunning);
+
+	UFUNCTION(Server, reliable, WithValidation)
+	void ServerInteract();
 
 	/** 
 	 * Called via input to turn at a given rate. 

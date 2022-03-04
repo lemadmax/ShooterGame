@@ -8,6 +8,11 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/Controller.h"
 #include "GameFramework/SpringArmComponent.h"
+#include "Door.h"
+#include "DrawDebugHelpers.h"
+
+
+#define INTERACTABLE_CHANNEL ECC_GameTraceChannel1
 
 //////////////////////////////////////////////////////////////////////////
 // AShooterGameCharacter
@@ -45,6 +50,15 @@ AShooterGameCharacter::AShooterGameCharacter()
 
 	// Note: The skeletal mesh and anim blueprint references on the Mesh component (inherited from Character) 
 	// are set in the derived blueprint asset named MyCharacter (to avoid direct content references in C++)
+	USkeletalMeshComponent* mesh = GetMesh();
+	UCapsuleComponent* capsule = GetCapsuleComponent();
+	mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	mesh->SetCollisionResponseToAllChannels(ECR_Ignore);
+	mesh->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
+	GetMesh()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
+	//capsule->SetCollisionResponseToAllChannels(ECR_Ignore);
+	capsule->SetCollisionResponseToChannel(ECC_GameTraceChannel1, ECR_Ignore);
+	capsule->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -59,6 +73,7 @@ void AShooterGameCharacter::SetupPlayerInputComponent(class UInputComponent* Pla
 
 	PlayerInputComponent->BindAction("Run", IE_Pressed, this, &AShooterGameCharacter::Run);
 	PlayerInputComponent->BindAction("StopRun", IE_Released, this, &AShooterGameCharacter::StopRun);
+	PlayerInputComponent->BindAction("Interact", IE_Pressed, this, &AShooterGameCharacter::ClientInteract);
 
 	PlayerInputComponent->BindAxis("MoveForward", this, &AShooterGameCharacter::MoveForward);
 	PlayerInputComponent->BindAxis("MoveRight", this, &AShooterGameCharacter::MoveRight);
@@ -171,4 +186,47 @@ void AShooterGameCharacter::ServerSetRunning_Implementation(bool isRunning)
 	{
 		StopRun();
 	}
+}
+
+void AShooterGameCharacter::ClientInteract()
+{
+	if (GetLocalRole() < ROLE_Authority)
+	{
+		ServerInteract();
+	}
+	else 
+	{
+		Interact();
+	}
+}
+
+void AShooterGameCharacter::Interact()
+{
+	FVector start_location = GetActorLocation();
+	FVector end_location = start_location + GetActorForwardVector() * 200.f;
+	FHitResult hitinfo(ForceInit);
+	bool hitted = GetWorld()->LineTraceSingleByChannel(hitinfo, start_location, end_location, ECollisionChannel::ECC_GameTraceChannel1);
+	DrawDebugLine(GetWorld(), start_location, end_location, FColor::Green, false, 3.f, false, 2.f);
+	if (hitted)
+	{
+		AActor *hit_actor = hitinfo.GetActor();
+		DrawDebugSphere(GetWorld(), hit_actor->GetActorLocation(), 20.f, 32, FColor::Red, false, 3.f, false, 2.f);
+		ADoor *hit_obj = Cast<ADoor>(hit_actor);
+		if (hit_obj)
+		{
+			hit_obj->Interacted(Controller->GetPawn());
+			UE_LOG(LogTemp, Warning, TEXT("ray hit"));
+		}
+	}
+}
+
+
+bool AShooterGameCharacter::ServerInteract_Validate()
+{
+	return true;
+}
+
+void AShooterGameCharacter::ServerInteract_Implementation()
+{
+	Interact();
 }
